@@ -1,6 +1,6 @@
 import type { ModRegistry, Settings } from "./types";
 
-function isTauri(): boolean {
+export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 

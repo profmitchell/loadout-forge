@@ -9,6 +9,7 @@ import type { ModEntry, ModRegistry, SlotId } from "@/lib/types";
 import {
   buildLoadout,
   getSettings,
+  isTauri,
   pickWorkspace,
   previewLoadoutName,
   revealInFinder,
@@ -47,14 +48,20 @@ export function LoadoutForge() {
   const [skippedDetail, setSkippedDetail] = useState<string | null>(null);
   const lastScanAt = useRef(0);
   const workspaceRef = useRef(workspace);
-  workspaceRef.current = workspace;
+
+  useEffect(() => {
+    workspaceRef.current = workspace;
+  }, [workspace]);
 
   useEffect(() => {
     const saved = localStorage.getItem(CARD_SIZE_KEY);
-    if (saved) {
-      const n = Number(saved);
-      if (n >= CARD_MIN && n <= CARD_MAX) setCardMinWidth(n);
-    }
+    if (!saved) return;
+
+    const n = Number(saved);
+    if (n < CARD_MIN || n > CARD_MAX) return;
+
+    const frame = requestAnimationFrame(() => setCardMinWidth(n));
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -91,6 +98,8 @@ export function LoadoutForge() {
   }, [refresh]);
 
   useEffect(() => {
+    if (!isTauri()) return;
+
     let disposed = false;
     let unlisten: (() => void) | undefined;
 

@@ -19,6 +19,11 @@
 
 # production
 /build
+/LoadoutForge.app/
+/LoadoutForge.app.before_install.bak*/
+/src-tauri/target/
+/src-tauri/resources/scripts/__pycache__/
+*.pyc
 
 # misc
 .DS_Store

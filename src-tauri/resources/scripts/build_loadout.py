@@ -186,6 +186,12 @@ def build_from_config(config: dict, workspace: Path, loadout_dir: Path, stage: b
         resolved = resolve_item_source(workspace, item["source_mod"])
         mod_path = workspace / resolved
         copied = copy_mod_files(mod_path, loadout_dir)
+        source_config = json.loads((mod_path / "mod_config.json").read_text(encoding="utf-8"))
+        for patch_name in source_config.get("root_patch_files", []):
+            patch_source = mod_path / patch_name
+            if not patch_source.is_file():
+                raise FileNotFoundError(f"Missing root patch file: {patch_source}")
+            shutil.copy2(patch_source, loadout_dir / patch_name)
         readme_lines.append(f"  - {item['label']} ({item['equip']})")
         manifest_paths.extend(copied)
 
@@ -243,6 +249,15 @@ def build_from_config(config: dict, workspace: Path, loadout_dir: Path, stage: b
             shutil.copy2(zip_path, bak)
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for name in ("README.txt", "manifest.json", "modinfo.json", "loadout_config.json"):
+            p = loadout_dir / name
+            if p.is_file():
+                zf.write(p, name)
+        root_patch_names: set[str] = set()
+        for item in config["items"]:
+            resolved = resolve_item_source(workspace, item["source_mod"])
+            source_config = json.loads((workspace / resolved / "mod_config.json").read_text(encoding="utf-8"))
+            root_patch_names.update(source_config.get("root_patch_files", []))
+        for name in sorted(root_patch_names):
             p = loadout_dir / name
             if p.is_file():
                 zf.write(p, name)

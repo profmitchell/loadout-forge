@@ -33,10 +33,7 @@ function SlotThumb({
   const [thumb, setThumb] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!mod?.glb) {
-      setGlbUrl(null);
-      return;
-    }
+    if (!mod?.glb) return;
     let active = true;
     loadGlbBlobUrl(mod.glb)
       .then((url) => {
@@ -49,10 +46,7 @@ function SlotThumb({
   }, [mod?.glb]);
 
   useEffect(() => {
-    if (!mod) {
-      setThumb(null);
-      return;
-    }
+    if (!mod) return;
     const path = mod.preview_front ?? mod.previews?.three_quarter;
     if (!path) return;
     let active = true;
@@ -115,7 +109,7 @@ export function SelectedLoadoutStrip({
     <div className="flex gap-2 overflow-x-auto pb-1">
       {slotOrder.map((slot) => (
         <SlotThumb
-          key={slot}
+          key={`${slot}:${selectedBySlot[slot]?.id ?? "empty"}`}
           slot={slot}
           mod={selectedBySlot[slot]}
           onClear={() => onClearSlot(slot)}

@@ -1,6 +1,13 @@
 {
   "name": "loadout-forge",
   "version": "0.1.0",
+  "description": "Build Cohen Concepts Crimson Desert mod loadouts for CDUMM.",
+  "license": "MIT",
+  "author": "Mitchell Cohen (Cohen Concepts)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/profmitchell/loadout-forge.git"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,10 +1,10 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+description = "Build Cohen Concepts Crimson Desert mod loadouts for CDUMM"
+authors = ["Mitchell Cohen <profmitchell@users.noreply.github.com>"]
+license = "MIT"
+repository = "https://github.com/profmitchell/loadout-forge"
 edition = "2021"
 rust-version = "1.77.2"
 

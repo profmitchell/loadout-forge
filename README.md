@@ -1,6 +1,8 @@
-# LoadoutForge
+# Loadout Forge
 
 Mac desktop app (Tauri + Next.js) for mixing Cohen Concepts Crimson Desert mesh mods into **CDUMM loadout zips**.
+
+Loadout Forge is an independent Cohen Concepts project. It exports packages compatible with [Crimson Desert Ultimate Mods Manager (CDUMM)](https://github.com/faisalkindi/CrimsonDesert-UltimateModsManager), created and maintained by Faisal Al Kindi (`faisalkindi`). It is not an official CDUMM build or replacement.
 
 ## Why loadouts?
 
@@ -39,7 +41,7 @@ Abbreviations are defined in `shared_tools/mod_registry.py` (`ABBR_OVERRIDES`).
 
 ## Workspace
 
-Default workspace: `/Users/Shared/CohenConcepts/Crimson Desert Mods`
+On Mitchell's development machine the app can auto-detect the Cohen Concepts workspace. Other users should click **Workspace...** and select a compatible mods workspace.
 
 Use **Workspace…** in the app to point at another clone. Settings persist in app config.
 
@@ -79,3 +81,27 @@ echo '{"loadout_number":5,"mods":["Helms__WhiteObsidianStag","ObsidianBow","PRIS
 ```
 
 Mod IDs match `CohenConcepts_Loadouts/mod_registry.json` (`source_mod` with `/` → `__` for nested paths).
+
+## Relationship to CDUMM
+
+Loadout Forge does not include or modify CDUMM source code. It creates `mesh_loose_mod` archives that users can import into CDUMM. CDUMM remains a separate project with its own maintainers, releases, support channels, and license terms.
+
+## Contributing
+
+Issues and pull requests are welcome. Keep changes focused, do not commit generated `.app` bundles or private mod assets, and run these checks before opening a pull request:
+
+```bash
+npm run lint
+npm run build
+cargo check --manifest-path src-tauri/Cargo.toml
+```
+
+## Credits
+
+- Loadout Forge: Mitchell Cohen / Cohen Concepts
+- CDUMM compatibility target: Faisal Al Kindi and the CDUMM contributors
+- Built with Tauri, Next.js, React Three Fiber, and Three.js
+
+## License
+
+Loadout Forge is released under the [MIT License](LICENSE).
