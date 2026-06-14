@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LoadoutForge
 
-## Getting Started
+Mac desktop app (Tauri + Next.js) for mixing Cohen Concepts Crimson Desert mesh mods into **CDUMM loadout zips**.
 
-First, run the development server:
+## Why loadouts?
+
+CDUMM `mesh_loose_mod` replacers conflict if multiple are applied for different items at once. A **loadout zip** bundles bow + lantern + sword + cannon (and helm) into **one** mod so a single Apply enables everything.
+
+## Run (dev)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd loadout-forge
+npm run tauri:dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Build standalone `.app`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cd loadout-forge
+npm run tauri:build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Output: `src-tauri/target/release/bundle/macos/LoadoutForge.app`
 
-## Learn More
+The `.app` **bundles** `mod_registry.py` and `build_loadout.py` — you do **not** need `shared_tools/` on disk for scan/export. You still point the app at your **mods workspace** (category folders + `CohenConcepts_Loadouts/`).
 
-To learn more about Next.js, take a look at the following resources:
+**First launch:** if auto-detect fails, click **Workspace…** and pick your `Crimson Desert Mods` folder (native folder picker).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**System Python** (`/opt/homebrew/bin/python3`) is enough; `GEOMOD/.venv` is optional.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Naming
 
-## Deploy on Vercel
+Exported loadouts use:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **CDUMM title:** `Cohen Concepts > Loadout 04 - Crescent-Obsidian-Lance-Void-Concrete`
+- **Zip:** `CohenConcepts_Loadout04_Crescent-Obsidian-Lance-Void-Concrete_CDUMM.zip`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Abbreviations are defined in `shared_tools/mod_registry.py` (`ABBR_OVERRIDES`).
+
+## Workspace
+
+Default workspace: `/Users/Shared/CohenConcepts/Crimson Desert Mods`
+
+Use **Workspace…** in the app to point at another clone. Settings persist in app config.
+
+## Category folders (auto-discovered)
+
+Drop any mod with `mod_config.json` under a category folder — **Rescan** picks it up:
+
+| Folder | Slot |
+|--------|------|
+| `1H/` | swords |
+| `Helms/` | helms |
+| `Bows/` | bows |
+| `Lanterns/` | lanterns |
+| `Cannon Staffs/` | cannons |
+
+New top-level folders appear automatically in the **Folders** sidebar.
+
+## 3D viewer
+
+- Cards **auto-load a spinning 3D preview** when scrolled into view (from each mod's `.glb`)
+- **Double-click** a card preview → fullscreen lightbox with orbit + zoom
+- **Esc** or click outside to close
+
+## Requirements
+
+**To run the built `.app`:** macOS + system `python3` + your mods workspace.
+
+**To develop/rebuild:** Node 20+, Rust/Cargo, `npm install`.
+
+Individual mods must be **built** (`tools/build_all.py`) before export.
+
+## CLI (same backend)
+
+```bash
+echo '{"loadout_number":5,"mods":["Helms__WhiteObsidianStag","ObsidianBow","PRISMBLADE","Rhinard/LumenLance"]}' \
+  | GEOMOD/.venv/bin/python3.14 CohenConcepts_Loadouts/tools/build_loadout.py --stdin-config
+```
+
+Mod IDs match `CohenConcepts_Loadouts/mod_registry.json` (`source_mod` with `/` → `__` for nested paths).
