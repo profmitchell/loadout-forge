@@ -13,6 +13,8 @@ mkdirSync(dest, { recursive: true });
 const copies = [
   [join(workspace, "shared_tools/mod_registry.py"), join(dest, "mod_registry.py")],
   [join(workspace, "CohenConcepts_Loadouts/tools/build_loadout.py"), join(dest, "build_loadout.py")],
+  [join(workspace, "shared_tools/build_mod_maker.py"), join(dest, "build_mod_maker.py")],
+  [join(workspace, "shared_tools/sync_owned_gear.py"), join(dest, "sync_owned_gear.py")],
 ];
 
 for (const [src, dst] of copies) {

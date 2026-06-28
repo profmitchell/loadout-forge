@@ -25,3 +25,9 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+@layer components {
+  .maker-input { @apply w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-crimson-500 disabled:opacity-50; }
+  .maker-primary { @apply rounded-lg bg-crimson-600 px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-500 disabled:opacity-40; }
+  .maker-secondary { @apply rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800; }
+}

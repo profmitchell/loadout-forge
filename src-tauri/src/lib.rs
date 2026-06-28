@@ -94,6 +94,44 @@ fn bundled_scripts_dir(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
+fn sync_owned_gear_script(app: &AppHandle, workspace: &Path) -> Result<PathBuf, String> {
+    let workspace_script = workspace.join("shared_tools/sync_owned_gear.py");
+    if workspace_script.is_file() {
+        return Ok(workspace_script);
+    }
+    if let Some(bundled) = bundled_scripts_dir(app) {
+        let script = bundled.join("sync_owned_gear.py");
+        if script.is_file() {
+            return Ok(script);
+        }
+    }
+    Err("Missing sync_owned_gear.py (workspace shared_tools/ or bundled scripts)".to_string())
+}
+
+fn sync_workspace_script(app: &AppHandle, workspace: &Path) -> Result<PathBuf, String> {
+    let workspace_script = workspace.join("shared_tools/sync_workspace.py");
+    if workspace_script.is_file() {
+        return Ok(workspace_script);
+    }
+    if let Some(bundled) = bundled_scripts_dir(app) {
+        let script = bundled.join("sync_workspace.py");
+        if script.is_file() {
+            return Ok(script);
+        }
+    }
+    let fallback = workspace.join("shared_tools/mod_registry.py");
+    if fallback.is_file() {
+        return Ok(fallback);
+    }
+    if let Some(bundled) = bundled_scripts_dir(app) {
+        let script = bundled.join("mod_registry.py");
+        if script.is_file() {
+            return Ok(script);
+        }
+    }
+    Err("Missing sync_workspace.py (workspace shared_tools/ or bundled scripts)".to_string())
+}
+
 fn mod_registry_script(app: &AppHandle, workspace: &Path) -> Result<PathBuf, String> {
     let workspace_script = workspace.join("shared_tools/mod_registry.py");
     if workspace_script.is_file() {
@@ -120,6 +158,16 @@ fn build_loadout_script(app: &AppHandle, workspace: &Path) -> Result<PathBuf, St
         }
     }
     Err("Missing build_loadout.py (workspace CohenConcepts_Loadouts/tools/ or bundled scripts)".to_string())
+}
+
+fn build_mod_maker_script(app: &AppHandle, workspace: &Path) -> Result<PathBuf, String> {
+    let workspace_script = workspace.join("shared_tools/build_mod_maker.py");
+    if workspace_script.is_file() { return Ok(workspace_script); }
+    if let Some(bundled) = bundled_scripts_dir(app) {
+        let script = bundled.join("build_mod_maker.py");
+        if script.is_file() { return Ok(script); }
+    }
+    Err("Missing build_mod_maker.py".to_string())
 }
 
 fn scripts_env(_app: &AppHandle, workspace: &Path) -> Option<String> {
@@ -190,7 +238,7 @@ async fn pick_workspace(app: AppHandle) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn scan_mods(app: AppHandle, workspace: Option<String>) -> Result<String, String> {
+fn scan_mods(app: AppHandle, workspace: Option<String>, full: Option<bool>) -> Result<String, String> {
     let settings = workspace
         .map(|w| Settings { workspace: w })
         .unwrap_or_else(|| load_settings(&app));
@@ -202,15 +250,19 @@ fn scan_mods(app: AppHandle, workspace: Option<String>) -> Result<String, String
         ));
     }
 
-    let script = mod_registry_script(&app, root)?;
+    let script = sync_workspace_script(&app, root)?;
     let registry_path = root.join("CohenConcepts_Loadouts/mod_registry.json");
     fs::create_dir_all(registry_path.parent().unwrap()).map_err(|e| e.to_string())?;
 
-    let output = python_command(&app, root, &script)?
-        .arg("--workspace")
+    let mut cmd = python_command(&app, root, &script)?;
+    cmd.arg("--workspace")
         .arg(root)
         .arg("--out")
-        .arg(&registry_path)
+        .arg(&registry_path);
+    if full.unwrap_or(false) {
+        cmd.arg("--update-stale").arg("--skip-previews");
+    }
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to run Python (is python3 installed?): {e}"))?;
 
@@ -245,7 +297,7 @@ fn build_loadout(
     cmd.arg("--stdin-config")
         .arg("--workspace")
         .arg(root);
-    if !stage_to_cdumm.unwrap_or(false) {
+    if !stage_to_cdumm.unwrap_or(true) {
         cmd.arg("--no-stage");
     }
 
@@ -271,6 +323,51 @@ fn build_loadout(
         return Err(format!("build_loadout failed:\n{stdout}\n{stderr}"));
     }
 
+    Ok(stdout)
+}
+
+#[tauri::command]
+fn sync_owned_gear(app: AppHandle, workspace: Option<String>) -> Result<String, String> {
+    let settings = workspace
+        .map(|w| Settings { workspace: w })
+        .unwrap_or_else(|| load_settings(&app));
+    let root = Path::new(&settings.workspace);
+    if !is_workspace(root) {
+        return Err(format!("Workspace not found or invalid: {}", settings.workspace));
+    }
+
+    let script = sync_owned_gear_script(&app, root)?;
+    let output = python_command(&app, root, &script)?
+        .output()
+        .map_err(|e| format!("Failed to run Python: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if !output.status.success() {
+        return Err(format!("sync_owned_gear failed:\n{stdout}\n{stderr}"));
+    }
+
+    let mut lines = stdout.trim().to_string();
+    if !stderr.trim().is_empty() {
+        if !lines.is_empty() {
+            lines.push('\n');
+        }
+        lines.push_str(stderr.trim());
+    }
+    Ok(lines)
+}
+
+#[tauri::command]
+fn build_mod_maker(app: AppHandle, workspace: Option<String>, payload: String) -> Result<String, String> {
+    let settings = workspace.map(|w| Settings { workspace: w }).unwrap_or_else(|| load_settings(&app));
+    let root = Path::new(&settings.workspace);
+    let script = build_mod_maker_script(&app, root)?;
+    let mut child = python_command(&app, root, &script)?.arg("--stdin-config").arg("--workspace").arg(root)
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
+    child.stdin.take().ok_or_else(|| "Failed to open stdin".to_string())?.write_all(payload.as_bytes()).map_err(|e| e.to_string())?;
+    let output = child.wait_with_output().map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    if !output.status.success() { return Err(format!("build_mod_maker failed:\n{stdout}\n{}", String::from_utf8_lossy(&output.stderr))); }
     Ok(stdout)
 }
 
@@ -324,7 +421,9 @@ pub fn run() {
             set_workspace,
             pick_workspace,
             scan_mods,
+            sync_owned_gear,
             build_loadout,
+            build_mod_maker,
             read_preview_image,
             read_glb_bytes,
             reveal_in_finder

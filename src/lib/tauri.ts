@@ -24,19 +24,32 @@ export async function pickWorkspace(): Promise<string | null> {
   return invoke<string | null>("pick_workspace");
 }
 
-export async function scanMods(workspace?: string): Promise<ModRegistry> {
-  const json = await invoke<string>("scan_mods", { workspace: workspace ?? null });
+export async function scanMods(workspace?: string, updateStale = false): Promise<ModRegistry> {
+  const json = await invoke<string>("scan_mods", {
+    workspace: workspace ?? null,
+    full: updateStale,
+  });
   return JSON.parse(json) as ModRegistry;
 }
 
 export async function buildLoadout(
   payload: { loadout_number: number; mods: string[] },
   workspace?: string,
+  stageToCdumm = true,
 ): Promise<string> {
   return invoke<string>("build_loadout", {
     workspace: workspace ?? null,
     payload: JSON.stringify(payload),
+    stage_to_cdumm: stageToCdumm,
   });
+}
+
+export async function syncOwnedGear(workspace?: string): Promise<string> {
+  return invoke<string>("sync_owned_gear", { workspace: workspace ?? null });
+}
+
+export async function buildModMaker(payload: Record<string, unknown>, workspace?: string): Promise<string> {
+  return invoke<string>("build_mod_maker", { workspace: workspace ?? null, payload: JSON.stringify(payload) });
 }
 
 export async function readPreviewImage(path: string): Promise<string> {

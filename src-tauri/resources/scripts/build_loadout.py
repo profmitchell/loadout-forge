@@ -58,7 +58,10 @@ def names_from_abbrevs(
     abbrevs: list[str],
     *,
     individual: bool = False,
+    name_prefix: str = "Cohen Concepts",
+    loadout_label: str | None = None,
 ) -> dict[str, str]:
+    prefix = (name_prefix or "Cohen Concepts").strip() or "Cohen Concepts"
     gear = "-".join(abbrevs)
     if individual:
         if len(abbrevs) != 1:
@@ -66,16 +69,17 @@ def names_from_abbrevs(
         slug = re.sub(r"[^A-Za-z0-9]+", "", abbrevs[0]) or "Gear"
         return {
             "id": f"Individual_{slug}",
-            "display_name": f"Cohen Concepts > {abbrevs[0]}",
+            "display_name": f"{prefix} > {abbrevs[0]}",
             "mod_name": f"CohenConcepts_{slug}",
             "zip_name": f"CohenConcepts_{slug}_CDUMM.zip",
             "gear_slug": slug,
         }
     num = f"{number:02d}"
     lid = f"Loadout{num}"
+    label_part = (loadout_label or "").strip() or f"Loadout {num}"
     return {
         "id": lid,
-        "display_name": f"Cohen Concepts > Loadout {num} - {gear}",
+        "display_name": f"{prefix} > {label_part} - {gear}",
         "mod_name": f"CohenConcepts_Loadout{num}_{gear.replace('-', '_')}",
         "zip_name": f"CohenConcepts_Loadout{num}_{gear}_CDUMM.zip",
         "gear_slug": gear,
@@ -114,9 +118,21 @@ def config_from_stdin(workspace: Path) -> dict:
         raise ValueError("Loadout cannot include two mods for the same equipment slot")
 
     individual = bool(payload.get("individual"))
-    names = names_from_abbrevs(number, abbrevs, individual=individual)
+    name_prefix = str(payload.get("name_prefix") or "Cohen Concepts")
+    loadout_label = payload.get("loadout_label")
+    names = names_from_abbrevs(
+        number,
+        abbrevs,
+        individual=individual,
+        name_prefix=name_prefix,
+        loadout_label=loadout_label,
+    )
     if individual:
-        names["display_name"] = f"Cohen Concepts > {selected[0]['label']}"
+        names["display_name"] = f"{name_prefix.strip() or 'Cohen Concepts'} > {selected[0]['label']}"
+    for key in ("id", "display_name", "mod_name", "zip_name"):
+        override = payload.get(key)
+        if override:
+            names[key] = str(override)
     desc_parts = ", ".join(item["label"] for item in selected)
     return {
         **names,

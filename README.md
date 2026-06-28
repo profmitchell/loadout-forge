@@ -28,7 +28,9 @@ The `.app` **bundles** `mod_registry.py` and `build_loadout.py` — you do **not
 
 **First launch:** if auto-detect fails, click **Workspace…** and pick your `Crimson Desert Mods` folder (native folder picker).
 
-**System Python** (`/opt/homebrew/bin/python3`) is enough; `GEOMOD/.venv` is optional.
+**Owned gear:** click **Sync owned** to read your Pearl Abyss `save.save` (read-only) and refresh `owned_gear.json`. Enable **Owned** in the sidebar to filter loadout mods, or **Owned only** in Mod Maker for donor picks.
+
+**System Python** (`/opt/homebrew/bin/python3`) is enough; `GEOMOD/.venv` is optional. Sync owned requires `CDUMM-PathcMerge` as a sibling repo for save decryption.
 
 ## Naming
 

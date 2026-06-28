@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ModCard } from "./ModCard";
 import { ModelLightbox } from "./ModelLightbox";
 import { SelectedLoadoutStrip } from "./SelectedLoadoutStrip";
+import { ModMaker } from "./ModMaker";
 import { buildModsBySlot, slotOrderFromRegistry } from "@/lib/slots";
 import type { ModEntry, ModRegistry, SlotId } from "@/lib/types";
 import {
@@ -15,6 +16,7 @@ import {
   revealInFinder,
   scanMods,
   setWorkspace,
+  syncOwnedGear,
 } from "@/lib/tauri";
 
 const CARD_SIZE_KEY = "loadout-forge-card-min-width";
@@ -23,10 +25,18 @@ const CARD_MAX = 380;
 const CARD_DEFAULT = 220;
 const RESCAN_COOLDOWN_MS = 3000;
 
-function formatScanStatus(reg: ModRegistry): string {
+function formatScanStatus(reg: ModRegistry, updateStale?: boolean): string {
   const parts = [`Found ${reg.mods.length} mods`];
-  if (reg.unbuilt_count) parts.push(`${reg.unbuilt_count} need build`);
+  if (reg.build_stale_count) parts.push(`${reg.build_stale_count} build stale`);
+  if (reg.zip_stale_count) parts.push(`${reg.zip_stale_count} zip stale`);
+  if (reg.unbuilt_count) parts.push(`${reg.unbuilt_count} unbuilt`);
   if (reg.skipped?.length) parts.push(`${reg.skipped.length} skipped`);
+  const sync = reg._last_sync;
+  if (updateStale && sync) {
+    if (sync.rebuilt_count) parts.push(`rebuilt ${sync.rebuilt_count}`);
+    if (sync.repacked_count) parts.push(`repacked ${sync.repacked_count}`);
+    if (sync.rebuild_failed?.length) parts.push(`${sync.rebuild_failed.length} failed`);
+  }
   if (reg.scanned_at) {
     parts.push(`scanned ${new Date(reg.scanned_at).toLocaleTimeString()}`);
   }
@@ -34,11 +44,13 @@ function formatScanStatus(reg: ModRegistry): string {
 }
 
 export function LoadoutForge() {
+  const [page, setPage] = useState<"loadouts" | "maker">("loadouts");
   const [registry, setRegistry] = useState<ModRegistry | null>(null);
   const [workspace, setWorkspaceState] = useState("");
   const [selected, setSelected] = useState<Partial<Record<SlotId, string>>>({});
   const [activeSlot, setActiveSlot] = useState<SlotId | "all">("all");
   const [activeCategory, setActiveCategory] = useState<string | "all">("all");
+  const [ownedOnly, setOwnedOnly] = useState(false);
   const [loadoutNumber, setLoadoutNumber] = useState(4);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,16 +80,16 @@ export function LoadoutForge() {
     localStorage.setItem(CARD_SIZE_KEY, String(cardMinWidth));
   }, [cardMinWidth]);
 
-  const refresh = useCallback(async (ws?: string) => {
+  const refresh = useCallback(async (ws?: string, updateStale = false) => {
     setBusy(true);
-    setStatus("Scanning workspace…");
+    setStatus(updateStale ? "Updating stale mods…" : "Scanning mod catalog…");
     try {
-      const reg = await scanMods(ws);
+      const reg = await scanMods(ws, updateStale);
       setRegistry(reg);
       setWorkspaceState(reg.workspace);
       setLoadoutNumber(reg.next_loadout_number);
       lastScanAt.current = Date.now();
-      setStatus(formatScanStatus(reg));
+      setStatus(formatScanStatus(reg, updateStale));
       setSkippedDetail(
         reg.skipped?.length
           ? reg.skipped.map((s) => `${s.path} — ${s.reason}`).join(" · ")
@@ -138,9 +150,10 @@ export function LoadoutForge() {
     return registry.mods.filter((m) => {
       if (activeSlot !== "all" && m.slot !== activeSlot) return false;
       if (activeCategory !== "all" && m.category !== activeCategory) return false;
+      if (ownedOnly && registry.owned_gear?.available && !m.owned) return false;
       return true;
     });
-  }, [registry, activeSlot, activeCategory]);
+  }, [registry, activeSlot, activeCategory, ownedOnly]);
 
   const groupedMods = useMemo(() => {
     if (activeCategory !== "all") return [{ label: null as string | null, mods: visibleMods }];
@@ -221,6 +234,20 @@ export function LoadoutForge() {
     }
   }
 
+  async function onSyncOwned() {
+    setBusy(true);
+    setStatus("Reading save inventory…");
+    try {
+      const msg = await syncOwnedGear(workspace || undefined);
+      await refresh(workspace || undefined);
+      setStatus(msg.trim() || "Owned gear synced from save.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onExport() {
     if (!registry || selectedMods.length === 0) {
       setStatus("Select at least one mod.");
@@ -241,7 +268,7 @@ export function LoadoutForge() {
       const match = out.match(/Built: (.+\.zip)/);
       const zip = match?.[1] ?? null;
       setLastZip(zip);
-      setStatus(zip ? `Exported ${zip}` : out);
+      setStatus(zip ? `Exported and staged for CDUMM: ${zip}` : out);
       if (zip) await refresh(registry.workspace);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err));
@@ -259,6 +286,10 @@ export function LoadoutForge() {
               Loadout<span className="text-crimson-400">Forge</span>
             </h1>
             <p className="text-xs text-zinc-500">Cohen Concepts · scans category folders automatically</p>
+            <div className="mt-3 flex gap-1 rounded-lg bg-zinc-950 p-1">
+              <button onClick={() => setPage("loadouts")} className={`rounded-md px-3 py-1 text-xs ${page === "loadouts" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>Loadout Forge</button>
+              <button onClick={() => setPage("maker")} className={`rounded-md px-3 py-1 text-xs ${page === "maker" ? "bg-crimson-950 text-crimson-200" : "text-zinc-500"}`}>Mod Maker</button>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
@@ -283,16 +314,49 @@ export function LoadoutForge() {
             </button>
             <button
               type="button"
+              onClick={onSyncOwned}
+              disabled={busy}
+              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              title="Read-only scan of Pearl Abyss save.save for owned donor PACs"
+            >
+              Sync owned
+            </button>
+            <button
+              type="button"
               onClick={() => refresh(workspace)}
               disabled={busy}
               className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
             >
               Rescan
             </button>
+            <button
+              type="button"
+              onClick={() => refresh(workspace, true)}
+              disabled={busy}
+              className="rounded-lg border border-amber-800/60 px-3 py-1.5 text-xs text-amber-200/90 hover:bg-amber-950/40 disabled:opacity-50"
+            >
+              Update stale
+            </button>
           </div>
         </div>
         <p className="mt-2 truncate font-mono text-[11px] text-zinc-600">{workspace}</p>
+        <p className="mt-1 text-[10px] text-zinc-500">
+          <span className="font-semibold text-zinc-400">Rescan</span> refreshes the mod catalog.{" "}
+          <span className="font-semibold text-zinc-400">Update stale</span> rebuilds outdated{" "}
+          <span className="font-mono">files/</span> and repacks zips. Export rebuilds selected mods automatically.
+        </p>
+        {registry?.owned_gear?.available ? (
+          <p className="mt-1 text-[10px] text-zinc-500">
+            Owned gear: {registry.owned_gear.gear_match_count ?? registry.owned_gear.owned_item_ids.length} items
+            {registry.owned_gear.save_slot ? ` · ${registry.owned_gear.save_slot}` : ""}
+            {registry.owned_mod_count !== undefined ? ` · ${registry.owned_mod_count} mods match` : ""}
+          </p>
+        ) : (
+          <p className="mt-1 text-[10px] text-zinc-600">Owned gear: not synced — click Sync owned after loot changes.</p>
+        )}
       </header>
+
+      {page === "maker" && registry ? <ModMaker registry={registry} onBuilt={() => refresh(registry.workspace)} /> : <>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 py-4 lg:flex-row">
         <aside className="flex max-h-48 shrink-0 gap-2 overflow-x-auto lg:max-h-none lg:w-44 lg:flex-col lg:overflow-y-auto">
@@ -326,6 +390,21 @@ export function LoadoutForge() {
                 count={modsBySlot[slot]?.length ?? 0}
               />
             ))}
+            <div className="mt-3 border-t border-zinc-800 pt-3">
+              <label className="flex cursor-pointer items-center gap-2 px-1 text-xs text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={ownedOnly}
+                  onChange={(e) => setOwnedOnly(e.target.checked)}
+                  disabled={!registry?.owned_gear?.available}
+                  className="accent-crimson-500"
+                />
+                Owned
+              </label>
+              <p className="mt-1 px-1 text-[10px] leading-snug text-zinc-600">
+                Show mods whose donor PAC matches your save inventory.
+              </p>
+            </div>
           </div>
         </aside>
 
@@ -413,6 +492,7 @@ export function LoadoutForge() {
           </div>
         </div>
       </footer>
+      </>}
 
       {viewer && (
         <ModelLightbox mod={viewer.mod} glbUrl={viewer.glbUrl} onClose={() => setViewer(null)} />
